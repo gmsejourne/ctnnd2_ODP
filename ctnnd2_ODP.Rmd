@@ -39,7 +39,9 @@ p50_BZ_width <- data.frame(animal = p50_BZ_width_decoded$Animal,
                      genotype = p50_BZ_width_decoded$Genotype,
                      sex = p50_BZ_width_decoded$Sex,
                      condition = p50_BZ_width_decoded$Condition,
-                     width = p50_BZ_width_decoded$Length)
+                     width = p50_BZ_width_decoded$Length, 
+                     quality = p50_BZ_width_decoded$Quality)
+p50_BZ_width <- p50_BZ_width[p50_BZ_width$quality == "" | p50_BZ_width$quality == "ok",]
 p50_BZ_width$animal <- factor(p50_BZ_width$animal)
 p50_BZ_width$genotype <- factor(p50_BZ_width$genotype)
 ```
@@ -64,7 +66,7 @@ Anova(model, type = "II")
 ```{r t-tests}
 p50_BZ_width$genotype_condition <- paste(p50_BZ_width$genotype, p50_BZ_width$condition)
 
-p50_BZ_width$width_norm <- p50_BZ_width$width / mean(p50_BZ_width[p50_BZ_width$genotype_condition == "WT NR",]$Width)
+p50_BZ_width$width_norm <- p50_BZ_width$width / mean(p50_BZ_width[p50_BZ_width$genotype_condition == "HET NR",]$width)
 
 p50_BZ_width$genotype_condition <- factor(p50_BZ_width$genotype_condition, levels = c("WT NR", "WT MD", "HET NR", "HET MD", "KO NR", "KO MD"))
 
@@ -92,7 +94,7 @@ TotalAverages
 ```{r}
 # Plots Superplot based on biological replicate averages
 
-superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width,color=factor(animal))) +
+superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width, color=factor(animal))) +
 
   # Adds individual data points
   geom_quasirandom(size=2, alpha = 1/2) +

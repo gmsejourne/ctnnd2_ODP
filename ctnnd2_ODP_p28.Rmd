@@ -1,7 +1,8 @@
 ---
-title: "ctnnd2_ODP"
+title: "ctnnd2_ODP_juvenile"
+author: "G Sejourne"
+date: "2024-08-29"
 output: html_document
-date: "2024-07-29"
 ---
 
 ```{r setup, include=FALSE}
@@ -21,67 +22,69 @@ library(viridis)
 cbPalette <- c("#C10028","#6C5C00","#00952A","#0092FF","#FF00EB","#F67D00","#27CC00","#00E9FB","#F2BAFF","#FFDEE5")
 
 # Imports dataset called "combined" that has the columns "replicate," "variable," and "value"
-p50_BZ_width <- read.csv("BZ_width.csv")
-p50_BZ_width <- p50_BZ_width
-p50_BZ_width <- p50_BZ_width[!is.na(p50_BZ_width$Width),]
+p28_BZ_width <- read.csv("BZ_width_p28.csv")
+p28_BZ_width <- p28_BZ_width
+p28_BZ_width <- p28_BZ_width[!is.na(p28_BZ_width$Length) & p28_BZ_width$Length > 20,]
 
-decoder <- read.csv("Decoder_ODP_CTNND2_p50.csv")
+decoder <- read.csv("Decoder_ODP_CTNND2_p28.csv")
 
 ```
 
 ```{r}
 # Orders the variables on x-axis
-p50_BZ_width$Random.Name <- p50_BZ_width$Label
+p28_BZ_width$Random.Name <- p28_BZ_width$Label
 
-p50_BZ_width_decoded <- merge(p50_BZ_width, decoder, by = 'Random.Name')
+p28_BZ_width_decoded <- merge(p28_BZ_width, decoder, by = 'Random.Name')
 
-p50_BZ_width <- data.frame(animal = p50_BZ_width_decoded$Animal,
-                     genotype = p50_BZ_width_decoded$Genotype,
-                     sex = p50_BZ_width_decoded$Sex,
-                     condition = p50_BZ_width_decoded$Condition,
-                     width = p50_BZ_width_decoded$Length, 
-                     quality = p50_BZ_width_decoded$Quality)
-p50_BZ_width <- p50_BZ_width[p50_BZ_width$quality == "" | p50_BZ_width$quality == "ok",]
-p50_BZ_width$animal <- factor(p50_BZ_width$animal)
-p50_BZ_width$genotype <- factor(p50_BZ_width$genotype)
+p28_BZ_width <- data.frame(animal = p28_BZ_width_decoded$Animal,
+                     genotype = p28_BZ_width_decoded$Genotype,
+                     sex = p28_BZ_width_decoded$Sex,
+                     condition = p28_BZ_width_decoded$Condition,
+                     width = p28_BZ_width_decoded$Length, 
+                     quality = p28_BZ_width_decoded$Quality)
+#p28_BZ_width <- p28_BZ_width[p28_BZ_width$quality == "" | p28_BZ_width$quality == "ok",]
+p28_BZ_width$animal <- factor(p28_BZ_width$animal)
+p28_BZ_width$genotype <- factor(p28_BZ_width$genotype)
 ```
 
 ```{r stats}
 library(FSA)
 
   Summarize(width ~ genotype + condition,
-          data=p50_BZ_width,
+          data=p28_BZ_width,
           digits=3)
 ```
 
 ```{r}
 library(car)
 model = lm(width ~ genotype + condition + genotype:condition,
-           data = p50_BZ_width)
+           data = p28_BZ_width)
 summary(model)
 
 Anova(model, type = "II")
 ```
 
 ```{r t-tests}
-p50_BZ_width$genotype_condition <- paste(p50_BZ_width$genotype, p50_BZ_width$condition)
+p28_BZ_width$genotype_condition <- paste(p28_BZ_width$genotype, p28_BZ_width$condition)
 
-p50_BZ_width$width_norm <- p50_BZ_width$width / mean(p50_BZ_width[p50_BZ_width$genotype_condition == "HET NR",]$width)
+p28_BZ_width$width_norm <- p28_BZ_width$width / mean(p28_BZ_width[p28_BZ_width$genotype_condition == "HET NR",]$width)
 
-p50_BZ_width$genotype_condition <- factor(p50_BZ_width$genotype_condition, levels = c("WT NR", "WT MD", "HET NR", "HET MD", "KO NR", "KO MD"))
+p28_BZ_width$genotype_condition <- factor(p28_BZ_width$genotype_condition, levels = c(
+  #"WT NR", "WT MD", 
+  "HET NR", "HET MD", "KO NR", "KO MD"))
 
-ReplicateAverages <- p50_BZ_width %>% group_by(genotype, animal, condition, genotype_condition) %>%
+ReplicateAverages <- p28_BZ_width %>% group_by(genotype, animal, condition, genotype_condition) %>%
   summarise(width = mean(width))
 ReplicateAverages
 
 # Gives the p-value for the t-Test of width and genotype
-#ttest1 <- t.test(width  ~ genotype, data = p50_BZ_width, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+#ttest1 <- t.test(width  ~ genotype, data = p28_BZ_width, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
 #ttest1p <- ttest1[["p.value"]]
 #ttest1
 #ttest1p
 
 # Gives the p-value for the t-Test of width and condition
-ttest2 <- t.test(width  ~ condition, data = p50_BZ_width, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttest2 <- t.test(width  ~ condition, data = p28_BZ_width, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
 ttest2p <- ttest2[["p.value"]]
 ttest2
 ttest2p
@@ -94,7 +97,7 @@ TotalAverages
 ```{r}
 # Plots Superplot based on biological replicate averages
 
-superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width, color=factor(animal))) +
+superplot_p28 <- ggplot(p28_BZ_width, aes(x=genotype_condition,y=width, color=factor(animal))) +
 
   # Adds individual data points
   geom_quasirandom(size=2, alpha = 1/2) +
@@ -120,13 +123,13 @@ superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width, color=fa
     ggtitle ("Binocular zone width (um)") + xlab("") + ylab("Width (um)") +
     scale_colour_manual(values = cbPalette) + scale_fill_manual(values = cbPalette)
 ppi = 300
-superplot_p50
-ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_p50.png", width = 5, height = 3)
+superplot_p28
+ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_p28.png", width = 5, height = 3)
 
 
 ```
 ```{r t-tests}
-ReplicateAverages <- p50_BZ_width %>% group_by(genotype, animal, condition, genotype_condition) %>%
+ReplicateAverages <- p28_BZ_width %>% group_by(genotype, animal, condition, genotype_condition) %>%
   summarise(width_norm = mean(width_norm))
 ReplicateAverages
 
@@ -138,7 +141,7 @@ TotalAverages
 ```{r}
 # Plots Superplot based on biological replicate averages
 
-superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width_norm,color=factor(animal))) +
+superplot_p28 <- ggplot(p28_BZ_width, aes(x=genotype_condition,y=width_norm,color=factor(animal))) +
 
   # Adds individual data points
   geom_quasirandom(size=2, alpha = 1/2) +
@@ -164,8 +167,8 @@ superplot_p50 <- ggplot(p50_BZ_width, aes(x=genotype_condition,y=width_norm,colo
     ggtitle ("Binocular zone width (um)") + xlab("") + ylab("Normalized width (um)") +
     scale_colour_manual(values = cbPalette) + scale_fill_manual(values = cbPalette)
 ppi = 300
-superplot_p50
-ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_normalized_p50.png", width = 5, height = 3)
+superplot_p28
+ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_normalized_p28.png", width = 5, height = 3)
 
 
 ```

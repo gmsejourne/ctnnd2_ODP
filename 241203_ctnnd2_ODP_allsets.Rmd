@@ -1,0 +1,250 @@
+---
+title: "ctnnd2_ODP_all_sets"
+author: "G Sejourne"
+date: "2024-12-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggpubr)
+library(ggbeeswarm)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dplyr)
+library(viridis)
+
+#windowsFonts(Arial = windowsFont("Arial"))
+
+# Defines a colorblind-friendly palette
+cbPalette <- c("#C10028","#6C5C00","#00952A","#0092FF","#FF00EB","#F67D00","#27CC00","#00E9FB","#F2BAFF","#FFDEE5")
+
+# Imports dataset called "combined" that has the columns "replicate," "variable," and "value"
+juvenile_set1 <- read.csv("BZ_width_juvenile_set1.csv")
+juvenile_set2 <- read.csv("BZ_width_juvenile_set2.csv")
+adult_set1 <- read.csv("BZ_width_adult_set1.csv")
+adult_set3_4 <- read.csv("BZ_width_adult_set3_4.csv")
+juvenile_BZ_width <- rbind(juvenile_set1[,c(1,length(colnames(juvenile_set1)))], juvenile_set2[,c(1,length(colnames(juvenile_set2)))])
+adult_BZ_width <- rbind(adult_set1[,c(1,length(colnames(adult_set1)))], adult_set3_4[,c(1,length(colnames(adult_set3_4)))])
+juvenile_BZ_width <- juvenile_BZ_width[!is.na(juvenile_BZ_width$Length) & juvenile_BZ_width$Length > 60,]
+adult_BZ_width <- adult_BZ_width[!is.na(adult_BZ_width$Length) & adult_BZ_width$Length > 60,]
+
+decoder <- read.csv("Decoder_all_sets.csv")
+
+```
+
+```{r}
+# Orders the variables on x-axis
+#juvenile_BZ_width$Random.Name <- juvenile_BZ_width$Label
+
+#juvenile_BZ_width_decoded <- merge(juvenile_BZ_width, decoder, by = 'Random.Name')
+
+juvenile_BZ_width$Original.Name = sapply(juvenile_BZ_width$Original.Name, function(x) str_split(x, " - ")[[1]][2])
+
+juvenile_BZ_width = data.frame(
+  Original.Name = juvenile_BZ_width$Original.Name,
+  Animal_ID = sapply(juvenile_BZ_width$Original.Name, function(x) {
+    if (str_detect(x, "set1_")) {
+      # Extract 6 characters after 'set1_'
+      return(str_extract(x, "(?<=set1_)[^_]+"))
+    } else {
+      # Extract 6 characters after 'Ctnnd2_'
+      return(str_extract(x, "(?<=Ctnnd2_)[^_]+"))
+    }
+  }),
+  Length = juvenile_BZ_width$Length
+  )
+
+juvenile_BZ_width_decoded = merge(juvenile_BZ_width, decoder, by = "Animal_ID")
+```
+
+```{r}
+adult_BZ_width$Original.Name = sapply(adult_BZ_width$Original.Name, function(x) str_split(x, " - ")[[1]][2])
+
+adult_BZ_width = data.frame(
+  Original.Name = adult_BZ_width$Original.Name,
+  Animal_ID = sapply(adult_BZ_width$Original.Name, function(x) {
+    if (str_detect(x, "et1_")) {
+      # Extract 6 characters after 'set1_'
+      return(str_extract(x, "(?<=et1_)[^_]+"))
+    } else {
+      # Extract 6 characters after 'Ctnnd2_'
+      return(str_extract(x, "(?<=adult_)[^_]+"))
+    }
+  }),
+  Length = adult_BZ_width$Length
+  )
+
+adult_BZ_width_decoded = merge(adult_BZ_width, decoder, by = "Animal_ID")
+```
+
+```{r stats}
+library(FSA)
+
+  Summarize(Length ~ Genotype + Condition,
+          data=juvenile_BZ_width_decoded,
+          digits=3)
+```
+
+```{r}
+library(car)
+model = lm(Length ~ Genotype + Condition + Genotype:Condition,
+           data = juvenile_BZ_width_decoded)
+summary(model)
+
+Anova(model, type = "II")
+```
+
+```{r t-tests}
+juvenile_BZ_width_decoded$Genotype_condition <- paste(juvenile_BZ_width_decoded$Genotype, juvenile_BZ_width_decoded$Condition)
+
+juvenile_BZ_width_decoded$width_norm <- juvenile_BZ_width_decoded$Length / mean(juvenile_BZ_width_decoded[juvenile_BZ_width_decoded$Genotype_condition == "HET NR",]$Length)
+
+juvenile_BZ_width_decoded$Genotype_condition <- factor(juvenile_BZ_width_decoded$Genotype_condition, levels = c(
+  "WT NR", 
+  #"WT MD", 
+  "HET NR", "HET MD", "KO NR", "KO MD"))
+
+ReplicateAverages <- juvenile_BZ_width_decoded %>% group_by(Genotype, Animal_ID, Condition, Genotype_condition) %>%
+  summarise(Length = mean(Length))
+ReplicateAverages
+
+# Gives the p-value for the t-Test of width and Genotype
+#ttest1 <- t.test(width  ~ Genotype, data = juvenile_BZ_width_decoded, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+#ttest1p <- ttest1[["p.value"]]
+#ttest1
+#ttest1p
+
+# Gives the p-value for the t-Test of width and Genotype
+ttest <- t.test(Length  ~ Genotype, data = juvenile_BZ_width_decoded[juvenile_BZ_width_decoded$Genotype %in% c("HET", "KO"),], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttestp <- ttest[["p.value"]]
+ttest
+ttestp
+
+# Calculates total averages
+TotalAverages <- ReplicateAverages %>% group_by(Genotype, Condition, Genotype_condition) %>%  summarise(Length = mean(Length))
+TotalAverages
+```
+
+```{r}
+# Plots Superplot based on biological replicate averages
+
+superplot_juvenile <- ggplot(juvenile_BZ_width_decoded, aes(x=Genotype_condition,y=Length, color=factor(Animal_ID))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=1, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages, fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5) +
+  # Adds error bars
+  stat_summary(data = ReplicateAverages, fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+          
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_point(data=ReplicateAverages, size=3) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("Binocular zone width (um)") + xlab("") + ylab("Width (um)") 
+#+ scale_color_viridis() + scale_fill_viridis()
+ppi = 300
+superplot_juvenile
+ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_juvenile_sets1_2.png", width = 5, height = 3)
+
+
+```
+
+# Repeat for adult
+
+```{r stats}
+library(FSA)
+
+  Summarize(Length ~ Genotype + Condition,
+          data=adult_BZ_width_decoded,
+          digits=3)
+```
+
+```{r}
+library(car)
+model = lm(Length ~ Genotype + Condition + Genotype:Condition,
+           data = adult_BZ_width_decoded)
+summary(model)
+
+Anova(model, type = "II")
+```
+
+```{r t-tests}
+adult_BZ_width_decoded$Genotype_condition <- paste(adult_BZ_width_decoded$Genotype, adult_BZ_width_decoded$Condition)
+
+adult_BZ_width_decoded$width_norm <- adult_BZ_width_decoded$Length / mean(adult_BZ_width_decoded[adult_BZ_width_decoded$Genotype_condition == "HET NR",]$Length)
+
+adult_BZ_width_decoded$Genotype_condition <- factor(adult_BZ_width_decoded$Genotype_condition, levels = c(
+  #"WT NR", 
+  "WT MD", 
+  "HET NR", "HET MD", "KO NR", "KO MD"))
+
+ReplicateAverages <- adult_BZ_width_decoded %>% group_by(Genotype, Animal_ID, Condition, Genotype_condition) %>%
+  summarise(Length = mean(Length))
+ReplicateAverages
+
+# Gives the p-value for the t-Test of width and Genotype
+#ttest1 <- t.test(width  ~ Genotype, data = adult_BZ_width_decoded, alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+#ttest1p <- ttest1[["p.value"]]
+#ttest1
+#ttest1p
+
+# Calculates total averages
+TotalAverages <- ReplicateAverages %>% group_by(Genotype, Condition, Genotype_condition) %>%  summarise(Length = mean(Length))
+TotalAverages
+
+# Gives the p-value for the t-Test of width and Genotype
+ttest <- t.test(Length  ~ Genotype, data = adult_BZ_width_decoded[adult_BZ_width_decoded$Genotype %in% c("HET", "KO"),], alternative = "two.sided", var.equal = TRUE, conf.level = 0.95)
+ttestp <- ttest[["p.value"]]
+ttest
+ttestp
+
+```
+
+```{r}
+# Plots Superplot based on biological replicate averages
+
+superplot_adult <- ggplot(adult_BZ_width_decoded, aes(x=Genotype_condition,y=Length, color=factor(Animal_ID))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=1, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages, fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5) +
+  # Adds error bars
+  stat_summary(data = ReplicateAverages, fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+          
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_point(data=ReplicateAverages, size=4) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("Binocular zone width (um)") + xlab("") + ylab("Width (um)") 
+#+ scale_color_viridis() + scale_fill_viridis()
+ppi = 300
+superplot_adult
+ggsave(filename = "ctnnd2_ko_v_ctrl_superplot_adult_sets1_2.png", width = 5, height = 3)
+
+
+```
